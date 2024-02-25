@@ -112,26 +112,29 @@ export async function fetchFilteredInvoices(
 
   try {
     const client = await pool.connect();
-    const invoices = await client.query(`
-      SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
-      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
-    `);
+    const invoices = await client.query({
+      text: `
+        SELECT
+          invoices.id,
+          invoices.amount,
+          invoices.date,
+          invoices.status,
+          customers.name,
+          customers.email,
+          customers.image_url
+        FROM invoices
+        JOIN customers ON invoices.customer_id = customers.id
+        WHERE
+          customers.name ILIKE $1 OR
+          customers.email ILIKE $1 OR
+          invoices.amount::text ILIKE $1 OR
+          invoices.date::text ILIKE $1 OR
+          invoices.status ILIKE $1
+        ORDER BY invoices.date DESC
+        LIMIT $2 OFFSET $3
+      `,
+      values: [`%${query}%`, ITEMS_PER_PAGE, offset]
+    });
     client.release();
     return invoices.rows;
   } catch (error) {
@@ -143,16 +146,20 @@ export async function fetchFilteredInvoices(
 export async function fetchInvoicesPages(query: string) {
   try {
     const client = await pool.connect();
-    const count = await client.query(`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-    `);
+    const count = await client.query({
+      text: 
+      `SELECT COUNT(*)
+      FROM invoices
+      JOIN customers ON invoices.customer_id = customers.id
+      WHERE
+        customers.name ILIKE $1 OR
+        customers.email ILIKE $1 OR
+        invoices.amount::text ILIKE $1 OR
+        invoices.date::text ILIKE $1 OR
+        invoices.status ILIKE $1
+      `,
+      values: [`%${query}%`]
+    });
     client.release();
 
     const totalPages = Math.ceil(Number(count.rows[0].count) / ITEMS_PER_PAGE);
